@@ -1,4 +1,4 @@
-;;; anything-project.el --
+;;; anything-project.el -- finding any resource of a project
 
 ;; Copyright (c) 2009 by KAYAC Inc.
 
@@ -22,7 +22,14 @@
 ;; Boston, MA 02110-1301, USA.
 
 
-;;; Installation
+;;; Commentary:
+;; anything-project.el is pure emacs lisp version of anything-find-project-resources.el.
+;; many ideas from
+;; http://trac.codecheck.in/share/browser/lang/elisp/anything-find-project-resources/trunk/anything-find-project-resources.el
+;; and
+;; http://blog.jrock.us/articles/eproject.POD
+
+;;; Installation:
 
 ;; drop this file into a directory in your `load-path',
 ;; and put these lines into your .emacs file.
@@ -34,7 +41,7 @@
 ;; project root directory is automatically detected by anything-project.el
 
 
-;;; configuration
+;;; Configuration:
 ;; you can add new project rule by `ap:add-project' function
 ;; keywords :look-for, :include-regexp and :exclude-regexp can be regexp or list of regexp
 ;; below are few samples
@@ -54,10 +61,7 @@
 
 
 
-;; idea from
-;; http://trac.codecheck.in/share/browser/lang/elisp/anything-find-project-resources/trunk/anything-find-project-resources.el
-;; and
-;; http://blog.jrock.us/articles/eproject.POD
+
 
 
 (require 'anything)
