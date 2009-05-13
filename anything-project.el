@@ -124,7 +124,6 @@
     (or (buffer-file-name)
         default-directory))))
 
-;; ap:projects からproject rootを判別する detector
 (defun* ap:root-detector (current-dir &optional (project-key :default))
   (let* ((current-dir (expand-file-name current-dir))
          (files (ap:get-data project-key :look-for)))
