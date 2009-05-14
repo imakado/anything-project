@@ -259,7 +259,7 @@ The action is to call FUNCTION with arguments ARGS."
   (interactive "P")
   (anything
    '(
-     ((name . "Project files")
+     ((name . ,(format "Project files. root directory: %s" (or ap:root-directory "")))
       (init . (lambda ()
                 (ap:project-files-init cache-clear)))
       (candidates-in-buffer)
