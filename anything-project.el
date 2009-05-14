@@ -62,10 +62,6 @@
 ;;  )
 
 
-
-
-
-
 (require 'anything)
 
 (defvar ap:default-directory-filter-regexps nil)
@@ -84,8 +80,6 @@
 (defvar ap:projects nil)
 (defvar ap:root-directory "")
 (defvar ap:--cache nil)
-
-  
 
 (defun ap:mk-list (a)
   (if (listp a) a (list a)))
