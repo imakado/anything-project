@@ -40,6 +40,8 @@
 ;; type C-c C-f to invoke anything with project files.
 ;; project root directory is automatically detected by anything-project.el
 
+;; clear cache, If `anything-project' function is called with prefix arg (C-u M-x anything-project)
+
 
 ;;; Configuration:
 ;; you can add new project rule by `ap:add-project' function
