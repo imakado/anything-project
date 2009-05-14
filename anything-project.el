@@ -126,7 +126,7 @@
 
 (defun* ap:root-detector (current-dir &optional (project-key :default))
   (let* ((current-dir (expand-file-name current-dir))
-         (files (ap:get-data project-key :look-for)))
+         (files (ap:get-project-data project-key :look-for)))
     (ap:root-directory-p files (directory-files current-dir))))
 
 
