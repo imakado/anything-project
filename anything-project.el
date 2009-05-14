@@ -252,8 +252,8 @@ The action is to call FUNCTION with arguments ARGS."
 (defun anything-project (&optional cache-clear)
   (interactive "P")
   (anything
-   '(
-     ((name . ,(format "Project files. root directory: %s" (or ap:root-directory "")))
+   `(
+     ((name . ,(format "Project files. root directory: %s" (or (car-safe (ap:get-root-directory)) "")))
       (init . (lambda ()
                 (ap:project-files-init cache-clear)))
       (candidates-in-buffer)
