@@ -40,6 +40,8 @@
 ;; type C-c C-f to invoke anything with project files.
 ;; project root directory is automatically detected by anything-project.el
 
+;; clear cache, If `anything-project' function is called with prefix arg (C-u M-x anything-project)
+
 
 ;;; Configuration:
 ;; you can add new project rule by `ap:add-project' function
@@ -60,10 +62,6 @@
 ;;  )
 
 
-
-
-
-
 (require 'anything)
 
 (defvar ap:default-directory-filter-regexps nil)
@@ -82,8 +80,6 @@
 (defvar ap:projects nil)
 (defvar ap:root-directory "")
 (defvar ap:--cache nil)
-
-  
 
 (defun ap:mk-list (a)
   (if (listp a) a (list a)))
@@ -256,8 +252,8 @@ The action is to call FUNCTION with arguments ARGS."
 (defun anything-project (&optional cache-clear)
   (interactive "P")
   (anything
-   '(
-     ((name . "Project files")
+   `(
+     ((name . ,(format "Project files. root directory: %s" (or (car-safe (ap:get-root-directory)) "")))
       (init . (lambda ()
                 (ap:project-files-init cache-clear)))
       (candidates-in-buffer)
