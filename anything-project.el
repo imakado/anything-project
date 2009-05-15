@@ -249,19 +249,43 @@ The action is to call FUNCTION with arguments ARGS."
 ;;;; Commands
 ;;;; %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+;; copied from anything-config.el
+(defun ap:anything-c-open-dired (file)
+  "Opens a dired buffer in FILE's directory.  If FILE is a
+directory, open this directory."
+  (if (file-directory-p file)
+      (dired file)
+    (dired (file-name-directory file))
+    (dired-goto-file file)))
+
+
+(defvar anything-c-source-project
+  `(
+    ((name . ,(format "Project files. root directory: %s" (or (car-safe (ap:get-root-directory)) "")))
+     (init . (lambda ()
+               (ap:project-files-init cache-clear)))
+     (candidates-in-buffer)
+     (action . (("Find file" .
+                 (lambda (c)
+                   (find-file (ap:expand-file c))))
+                ("Find file other window" .
+                 (lambda (c)
+                   (find-file-other-window (ap:expand-file c))))
+                ("Find file other frame" .
+                 (lambda (c)
+                   (find-file-other-frame (ap:expand-file c))))
+                ("Open dired in file's directory" .
+                 (lambda (c)
+                   (ap:anything-c-open-dired (ap:expand-file c))))
+                ))
+     )))
+
 (defun anything-project (&optional cache-clear)
   (interactive "P")
-  (anything
-   `(
-     ((name . ,(format "Project files. root directory: %s" (or (car-safe (ap:get-root-directory)) "")))
-      (init . (lambda ()
-                (ap:project-files-init cache-clear)))
-      (candidates-in-buffer)
-      (action . (("Find file" .
-                  (lambda (c)
-                    (find-file (ap:expand-file c))))))
-      ))
-   nil "Project files: "))
+  (anything anything-c-source-project 
+            nil "Project files: "))
+
+
 
 ;;;; %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ;;;; Default Project
