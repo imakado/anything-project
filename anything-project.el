@@ -168,7 +168,7 @@
           when (and (file-directory-p file)
                     (not (ap:any-match dir-filter-regexp file)))
           nconc (ap:directory-files-recursively regexp file type dir-filter-regexp) into ret
-          finally return (nreverse ret))))
+          finally return  ret)))
 
 (defun ap:truncate-file-name (root-dir files)
   (let* ((root-dir (replace-regexp-in-string "/$" "" root-dir))
