@@ -302,5 +302,10 @@ directory, open this directory."
  :look-for ap:default-project-root-files
  )
 
+(ap:add-project
+ :name 'symfony
+ :look-for '("symfony")
+ )
+
 
 (provide 'anything-project)
