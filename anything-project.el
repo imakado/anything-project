@@ -73,7 +73,7 @@
 (defvar ap:default-project-root-files
     '("build.xml" "prj.el" ".project" "pom.xml"
       "Makefile" "configure" "Rakefile" "Info.plist"
-      "NAnt.build" "xpi" "Makefile.SH"
+      "NAnt.build" "xpi" "Makefile.SH" ".git"
       ))
 
 ;; internal
