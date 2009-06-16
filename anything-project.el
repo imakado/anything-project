@@ -64,6 +64,9 @@
 
 (require 'anything)
 
+(defvar ap:my-projects nil)
+(defvar ap:history nil)
+
 (defvar ap:default-directory-filter-regexps nil)
 
 (defvar ap:default-filter-regexps
@@ -74,6 +77,8 @@
     '("build.xml" "prj.el" ".project" "pom.xml"
       "Makefile" "configure" "Rakefile" "Info.plist"
       "NAnt.build" "xpi" "Makefile.SH" ".git"
+
+      "CVS"
       ))
 
 ;; internal
@@ -84,15 +89,18 @@
 (defun ap:mk-list (a)
   (if (listp a) a (list a)))
 
-(defun* ap:add-project (&key name look-for (include-regexp ".*") (exclude-regexp nil) (exclude-directory-regexp nil))
+(defun* ap:add-project (&key name look-for (include-regexp ".*") (exclude-regexp nil) (exclude-directory-regexp nil) (grep-extensions nil))
   (assert (not (null look-for)))
   (assert (and (not (null name))
                (symbolp name)))
+  (assert (or (null grep-extensions)
+              (listp grep-extensions)))
   (setq ap:projects (assq-delete-all name ap:projects))
   (add-to-list 'ap:projects
                `(,name . ((,:look-for . ,(ap:mk-list look-for))
                           (,:include-regexp . ,(ap:mk-list include-regexp))
-                          (,:exclude-regexp . ,(ap:mk-list exclude-regexp))))))
+                          (,:exclude-regexp . ,(ap:mk-list exclude-regexp))
+                          (,:grep-extensions . ,grep-extensions)))))
 
 ;; (ap:get-project-data 'perl :look-for)
 (defun ap:get-project-data (name type)
@@ -106,13 +114,18 @@
          (keys (delete 'default keys)))
     (add-to-list 'keys 'default t)))
 
-(defun ap:root-directory-p (root-files files)
-  (some
-   (lambda (file)
-     (find file
-           root-files
-           :test 'string=))
-   files))
+(defun ap:root-directory-p (root-files-or-fn files)
+  (cond
+   ((functionp (car-safe root-files-or-fn))
+    (ignore-errors
+      (funcall (car root-files-or-fn) files)))
+   (t
+    (some
+     (lambda (file)
+       (find file
+             files
+             :test 'string=))
+     root-files-or-fn))))
 
 (defun ap:current-directory ()
   (file-name-directory
@@ -122,8 +135,8 @@
 
 (defun* ap:root-detector (current-dir &optional (project-key :default))
   (let* ((current-dir (expand-file-name current-dir))
-         (files (ap:get-project-data project-key :look-for)))
-    (ap:root-directory-p files (directory-files current-dir))))
+         (files-or-fn (ap:get-project-data project-key :look-for)))
+    (ap:root-directory-p files-or-fn (directory-files current-dir))))
 
 
 (defvar ap:get-root-directory-limit 10)
@@ -145,6 +158,12 @@
           for ret = (values (ap:get-root-directory-aux key) key)
           until (car ret)
           finally return ret)))
+;;; add-to-history
+(defadvice ap:get-root-directory (after add-to-history activate)
+  (ignore-errors
+    (destructuring-bind (root-dir key) ad-return-value
+      (when (and root-dir key (stringp root-dir))
+        (add-to-list 'ap:history root-dir)))))
 
 (defsubst ap:any-match (regexp-or-regexps file-name)
   (when regexp-or-regexps
@@ -199,6 +218,7 @@
     (ap:cache-get-or-set
      root-dir
      (lambda ()
+       (message "getting project files...")
        (let ((include-regexp (ap:get-project-data key :include-regexp))
              (exclude-regexp (ap:get-project-data key :exclude-regexp)))
          (let* ((files (ap:directory-files-recursively include-regexp root-dir 'identity exclude-regexp))
@@ -219,9 +239,6 @@
   (let ((root-dir (replace-regexp-in-string "/$" "" ap:root-directory)))
     (concat root-dir file)))
 
-
-
-
 (if (fboundp 'anything-run-after-quit)
     (defalias 'ap:anything-run-after-quit 'anything-run-after-quit)
   (defun ap:anything-run-after-quit (function &rest args)
@@ -234,8 +251,8 @@ The action is to call FUNCTION with arguments ARGS."
 (defun ap:project-files-init-msg ()
   (message "Buffer is not project file. buffer: %s" (ap:current-directory)))
 
-(defun ap:project-files-init (&optional cache-clear)
-  (let ((files (ap:get-project-files cache-clear))
+(defun* ap:project-files-init (&optional cache-clear files)
+  (let ((files (or files (ap:get-project-files cache-clear)))
         (cands-buf (anything-candidate-buffer 'local)))
     (cond
      (files
@@ -244,6 +261,74 @@ The action is to call FUNCTION with arguments ARGS."
      (t
       (ap:anything-run-after-quit
        'ap:project-files-init-msg)))))
+
+
+;;;; %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+;;;; Project Grep
+;;;; %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+(defun anything-project-grep ()
+  (interactive)
+  (cond
+   ((require 'anything-grep  nil t)
+    (ap:do-project-grep))
+   (t
+    (message "`anything-grep' is not installed. this command requires `anything-grep'"))))
+
+(defun ap:do-project-grep ()
+  (destructuring-bind (root-dir key) (ap:get-root-directory)
+    (when (and root-dir key)
+      (let* ((query (read-string "Grep query: " (or (thing-at-point 'symbol) "")))
+             (command (ap:build-grep-command key)))
+        (anything-grep-base
+             (list
+              (agrep-source (format (agrep-preprocess-command command)
+                                    (shell-quote-argument query))
+                            root-dir)))
+        ))))
+
+(defun ap:build-grep-command (key)
+  (let ((grep-extensions (ap:get-grep-extensions key))
+        (ack-command (ap:get-ack-command))
+        (xargs-command (ap:get-xargs-command))
+        (egrep-command (ap:get-egrep-command)))
+    (concat
+     ack-command " -afG " grep-extensions
+     " | "
+     xargs-command
+     " "
+     egrep-command " -Hin "
+     "%s")))
+
+;;  (ap:build-grep-command  'perl "sub")
+;; ap:build-grep-command
+; (ap:get-grep-extensions 'perl)
+
+(defun ap:get-xargs-command ()
+  (or (executable-find "xargs")
+           (error "can't find 'xargs' command in PATH!!")))
+
+(defun ap:get-egrep-command ()
+  (or (executable-find "egrep")
+           (error "can't find 'egrep' command in PATH!!")))
+
+(defun ap:get-ack-command ()
+  (or (executable-find "ack")
+      (executable-find "ack-grep")
+      (error "can't find 'ack' command in PATH!!"))) ; debian
+
+;; "ack -afG '(m|t|tt2|tt|yaml|yml|p[lm]|js|html|xs)$' | xargs egrep -Hin %s"
+(defun ap:get-grep-extensions (key)
+  (let ((list-of-grep-extention
+         (cond
+          ((ap:get-project-data key :grep-extensions))
+          (t
+           (ap:get-project-data key :include-regexp)))))
+    ;; build, '(m|t|tt2|tt|yaml|yml|p[lm]|js|html|xs)$'
+    (concat
+     "'("
+     (mapconcat 'identity list-of-grep-extention "|")
+     ")$'")))
 
 ;;;; %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ;;;; Commands
@@ -280,32 +365,93 @@ directory, open this directory."
                 ))
      )))
 
+(defvar anything-c-source-my-projects
+  `((name . "Projects")
+    (candidates . (lambda () ap:my-projects))
+    (action . (("anything project" .
+                (lambda (c)
+                  (flet ((buffer-file-name () nil))
+                    (let ((default-directory c))
+                      (call-interactively 'anything-project)))
+                  ))))
+    ))
+
+(defvar anything-c-source-projects-history
+  `((name . "Projects history")
+    (candidates . (lambda () ap:history))
+    (action . (("anything project" .
+                (lambda (c)
+                  (flet ((buffer-file-name () nil))
+                    (let ((default-directory c))
+                      (call-interactively 'anything-project)))
+                  ))))
+    ))
+
+(defun anything-my-project ()
+  (interactive)
+  (anything '(anything-c-source-my-projects
+              anything-c-source-projects-history)))
+
+;; copied from anything-config.el :)
+(defun ap:shorten-home-path (files)
+  "Replaces /home/user with ~."
+  (mapcar (lambda (file)
+            (let ((home (replace-regexp-in-string "\\\\" "/" ; stupid Windows...
+                                                  (getenv "HOME"))))
+              (if (string-match home file)
+                  (cons (replace-match "~" nil nil file) file)
+                file)))
+          files))
+
 (defun anything-project (&optional cache-clear)
   (interactive "P")
   (anything anything-c-source-project 
             nil "Project files: "))
 
-
-
 ;;;; %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-;;;; Default Project
+;;;; Default Project (Samples)
 ;;;; %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+;; utils
+(defun ap:all-files-exist (project-files files)
+  (subsetp project-files
+           files
+           :test 'string=))
 
 (ap:add-project
  :name 'perl
  :look-for '("Makefile.PL" "Build.PL")
- :include-regexp '("\\.pm$" "\\.t$" "\\.pl$" "\\.PL$")
- )
+ :include-regexp '("\\.pm$" "\\.t$" "\\.pl$" "\\.PL$") 
+)
 
 (ap:add-project
  :name 'default
  :look-for ap:default-project-root-files
  )
 
+;;; PHP symfony
 (ap:add-project
  :name 'symfony
- :look-for '("symfony")
- )
+ :look-for 'ap:symfony-root-detector
+ :grep-extensions '("\\.php"))
+
+(defun ap:symfony-root-detector (files)
+  (let ((symfony-files '("symfony" "apps" "config")))
+    (every
+     (lambda (file)
+       (find file
+             files
+             :test 'string=))
+     symfony-files)))
+
+;;; PHP cake
+(ap:add-project
+ :name 'cake
+ :look-for 'ap:cake-root-detector
+ :grep-extensions '("\\.php"))
+(defun ap:cake-root-detector (files)
+  (ap:all-files-exist '("index.php" "controllers" "config") files))
+
 
 
 (provide 'anything-project)
