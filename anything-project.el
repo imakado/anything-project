@@ -345,25 +345,25 @@ directory, open this directory."
 
 
 (defvar anything-c-source-project
-  `(
-    ((name . ,(format "Project files. root directory: %s" (or (car-safe (ap:get-root-directory)) "")))
-     (init . (lambda ()
-               (ap:project-files-init cache-clear)))
-     (candidates-in-buffer)
-     (action . (("Find file" .
-                 (lambda (c)
-                   (find-file (ap:expand-file c))))
-                ("Find file other window" .
-                 (lambda (c)
-                   (find-file-other-window (ap:expand-file c))))
-                ("Find file other frame" .
-                 (lambda (c)
-                   (find-file-other-frame (ap:expand-file c))))
-                ("Open dired in file's directory" .
-                 (lambda (c)
-                   (ap:anything-c-open-dired (ap:expand-file c))))
-                ))
-     )))
+  `((name . ,(format "Project files. root directory: %s" (or (car-safe (ap:get-root-directory)) "")))
+    (init . (lambda ()
+              (ap:project-files-init (if (boundp 'cache-clear) ; KLUDGE!!
+                                         cache-clear
+                                       current-prefix-arg))))
+    (candidates-in-buffer)
+    (action . (("Find file" .
+                (lambda (c)
+                  (find-file (ap:expand-file c))))
+               ("Find file other window" .
+                (lambda (c)
+                  (find-file-other-window (ap:expand-file c))))
+               ("Find file other frame" .
+                (lambda (c)
+                  (find-file-other-frame (ap:expand-file c))))
+               ("Open dired in file's directory" .
+                (lambda (c)
+                  (ap:anything-c-open-dired (ap:expand-file c))))))
+    ))
 
 (defvar anything-c-source-my-projects
   `((name . "Projects")
