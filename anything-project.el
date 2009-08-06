@@ -95,8 +95,18 @@
 (defvar ap:global-grep-extensions nil
   "this variable must be let bindded!!")
 
+(defvar ap:project-files-filters nil
+  "list of function filter project-files.
+each function is called with one arg(list of project-file)")
+
 (defun ap:mk-list (a)
   (if (listp a) a (list a)))
+
+(defun ap:apply-filters (filter-fns files)
+  (let ((ret nil))
+  (loop for filter-fn in ap:project-files-filters
+        do (setq ret (funcall filter-fn files))
+        finally return ret)))
 
 (defun* ap:add-project (&key name look-for (include-regexp ".*") (exclude-regexp nil) (exclude-directory-regexp nil) (grep-extensions nil))
   (assert (not (null look-for)))
@@ -247,6 +257,7 @@
        (let ((include-regexp (or ap:global-include-regexp (ap:get-project-data key :include-regexp)))
              (exclude-regexp (or ap:global-exclude-regexp (ap:get-project-data key :exclude-regexp))))
          (let* ((files (ap:directory-files-recursively include-regexp root-dir 'identity exclude-regexp))
+                (files (ap:apply-filters ap:project-files-filters files))
                 (files (ap:truncate-file-name root-dir files)))
            files))))))
 
