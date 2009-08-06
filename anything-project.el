@@ -81,10 +81,19 @@
       "CVS"
       ))
 
-;; internal
+;; Internal variables
 (defvar ap:projects nil)
 (defvar ap:root-directory "")
 (defvar ap:--cache nil)
+
+(defvar ap:global-look-for nil
+  "this variable must be let bindded!!")
+(defvar ap:global-include-regexp nil
+  "this variable must be let bindded!!")
+(defvar ap:global-exclude-regexp nil
+  "this variable must be let bindded!!")
+(defvar ap:global-grep-extensions nil
+  "this variable must be let bindded!!")
 
 (defun ap:mk-list (a)
   (if (listp a) a (list a)))
@@ -103,10 +112,19 @@
                           (,:grep-extensions . ,grep-extensions)))))
 
 ;; (ap:get-project-data 'perl :look-for)
+
+
 (defun ap:get-project-data (name type)
-  (let ((alist (assoc-default name ap:projects)))
-    (when alist
-      (assoc-default type alist))))
+  (let ((sym (intern (concat "ap:global-"
+                             (replace-regexp-in-string "^:" "" (symbol-name type))))))
+    (cond
+     ((when (and (boundp sym)
+                  (not (null sym))))
+      sym)
+     (t
+       (let ((alist (assoc-default name ap:projects)))
+         (when alist
+           (assoc-default type alist)))))))
 
 (defun ap:get-project-keys ()
   (let* ((keys (loop for alist in ap:projects
@@ -179,7 +197,9 @@
                      (dir 'file-directory-p)
                      (file 'file-regular-p)
                      (otherwise 'identity)))
-         (files (directory-files directory t "^[^.]" t)))
+         (files (directory-files directory t "^[^.]" t))
+         (files (mapcar 'ap:follow-symlink files))
+         (files (remove-if (lambda (s) (string-match (rx bol (repeat 1 2 ".") eol) s)) files)))
     (loop for file in files
           when (and (funcall predfunc file)
                     (ap:any-match regexp (file-name-nondirectory file)))
@@ -188,6 +208,11 @@
                     (not (ap:any-match dir-filter-regexp file)))
           nconc (ap:directory-files-recursively regexp file type dir-filter-regexp) into ret
           finally return  ret)))
+
+(defun ap:follow-symlink (file)
+  (cond ((file-symlink-p file)
+         (expand-file-name (file-symlink-p file)))
+        (t (expand-file-name file))))
 
 (defun ap:truncate-file-name (root-dir files)
   (let* ((root-dir (replace-regexp-in-string "/$" "" root-dir))
@@ -219,21 +244,23 @@
      root-dir
      (lambda ()
        (message "getting project files...")
-       (let ((include-regexp (ap:get-project-data key :include-regexp))
-             (exclude-regexp (ap:get-project-data key :exclude-regexp)))
+       (let ((include-regexp (or ap:global-include-regexp (ap:get-project-data key :include-regexp)))
+             (exclude-regexp (or ap:global-exclude-regexp (ap:get-project-data key :exclude-regexp))))
          (let* ((files (ap:directory-files-recursively include-regexp root-dir 'identity exclude-regexp))
                 (files (ap:truncate-file-name root-dir files)))
            files))))))
 
+(defvar ap:global-cache-key "")
 (defun ap:cache-get-or-set (root-dir get-files-fn)
-  (let ((cache (assoc-default root-dir ap:--cache)))
-    (if cache
-        cache ; cache hit!!
-      (let ((files (funcall get-files-fn)))
-        (when files
-          (add-to-list 'ap:--cache
-                       `(,root-dir . ,files))
-          files)))))
+  (let ((cache-key (concat root-dir ap:global-cache-key)))
+    (let ((cache (assoc-default cache-key ap:--cache)))
+      (if cache
+          cache                         ; cache hit!!
+        (let ((files (funcall get-files-fn)))
+          (when files
+            (add-to-list 'ap:--cache
+                         `(,cache-key . ,files))
+            files))))))
 
 (defun ap:expand-file (file)
   (let ((root-dir (replace-regexp-in-string "/$" "" ap:root-directory)))
@@ -321,7 +348,8 @@ The action is to call FUNCTION with arguments ARGS."
 (defun ap:get-grep-extensions (key)
   (let ((list-of-grep-extention
          (cond
-          ((ap:get-project-data key :grep-extensions))
+          ((or ap:global-grep-extensions
+               (ap:get-project-data key :grep-extensions)))
           (t
            (ap:get-project-data key :include-regexp)))))
     ;; build, '(m|t|tt2|tt|yaml|yml|p[lm]|js|html|xs)$'
@@ -405,8 +433,9 @@ directory, open this directory."
 
 (defun anything-project (&optional cache-clear)
   (interactive "P")
-  (anything anything-c-source-project 
+  (anything 'anything-c-source-project
             nil "Project files: "))
+
 
 ;;;; %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ;;;; Default Project (Samples)
