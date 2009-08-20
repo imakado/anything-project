@@ -95,7 +95,7 @@
 (defvar ap:global-grep-extensions nil
   "this variable must be let bindded!!")
 
-(defvar ap:project-files-filters nil
+(defvar ap:project-files-filters  (list 'identity)
   "list of function filter project-files.
 each function is called with one arg(list of project-file)")
 
@@ -234,9 +234,9 @@ each function is called with one arg(list of project-file)")
       (mapcar truncate files))))
 
 (defun ap:get-project-files (&optional clear-cache)
-  (destructuring-bind
-      (root-dir key)
-      (ap:get-root-directory)
+  (let* ((values (ap:get-root-directory))
+         (root-dir (first values))
+         (key (second values)))
     (when (and root-dir key)
       ;; clear cache if command invoked with prefix(C-u).
       (when clear-cache
