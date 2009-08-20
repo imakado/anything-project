@@ -384,7 +384,7 @@ directory, open this directory."
 
 
 (defvar anything-c-source-project
-  `((name . ,(format "Project files. root directory: %s" (or (car-safe (ap:get-root-directory)) "")))
+  '((name . "Project Files")
     (init . (lambda ()
               (ap:project-files-init (if (boundp 'cache-clear) ; KLUDGE!!
                                          cache-clear
