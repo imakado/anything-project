@@ -476,7 +476,7 @@ directory, open this directory."
  :grep-extensions '("\\.php"))
 
 (defun ap:symfony-root-detector (files)
-  (let ((symfony-files '("symfony" "apps" "config")))
+  (let ((symfony-files '("apps" "web" "lib")))
     (every
      (lambda (file)
        (find file
@@ -489,9 +489,87 @@ directory, open this directory."
  :name 'cake
  :look-for 'ap:cake-root-detector
  :grep-extensions '("\\.php"))
+
 (defun ap:cake-root-detector (files)
-  (ap:all-files-exist '("index.php" "controllers" "config") files))
+  (let ((cur-dir (ap:current-directory)))
+    (and cur-dir
+         (file-readable-p (concat cur-dir "config/core.php")))))
+
+(defmacro ap:with-current-dir (dir &rest body)
+  (declare (indent 1))
+  `(flet ((ap:current-directory () (file-name-directory ,dir)))
+     (progn ,@body)))
+
+(defun ap:abs->relatives (los)
+  (assert (listp los))
+  (mapcar 'file-relative-name los))
+
+(defun ap:path->filenames (los)
+  (mapcar 'file-name-nondirectory los))
+
+;;;; Test
+;; Prefix: ap-t:
+(defun ap-t:directory-separator ()
+  (substring (file-name-as-directory ".") -1))
+
+(defun ap-t:path-to (path &rest paths)
+  (assert (or (null paths)
+              (and (listp paths)
+                   (stringp (car-safe paths)))))
+  (assert (stringp path))
+  (let ((paths (append (list path) paths)))
+    (concat (file-name-directory (locate-library "anything-project"))
+            (mapconcat 'identity paths (ap-t:directory-separator)))))
+
+(defun ap-t:directory-type ()
+  (second (ap:get-root-directory)))
 
 
+; (ap-t:path-to "t" "projectX")
+(dont-compile
+  (when (fboundp 'expectations)
+    (expectations
+      (desc "ap:directory-files-recursively")
+      (desc "recursively projectX")
+      (expect '("Makefile" "file2" "file1" "deep-file2" "deep-file1")
+        (ap:path->filenames
+         (ap:directory-files-recursively ".*" (ap-t:path-to "t" "projectX") 'file))
+      )
+
+      (desc "non recursively")
+      (expect t
+        (let ((file-names (ap:path->filenames
+                           (ap:directory-files-recursively ".*" (ap-t:path-to "t" "projectX") nil nil t))))
+          (and (not (member "deep-file2" file-names))
+               (not (member "deep-file1" file-names)))))
+
+      (desc "---------------- directory type ----------------")
+      (desc "default")
+      (expect 'default
+        (ap:with-current-dir (ap-t:path-to "t" "projectX")
+          (ap-t:directory-type)))
+
+      (desc "-- perl --")
+      (desc "Makefile.PL")
+      (expect 'perl
+        (ap:with-current-dir (ap-t:path-to "t" "perl-project1" "file1")
+          (ap-t:directory-type)))
+
+      (desc "Build.PL")
+      (expect 'perl
+        (ap:with-current-dir (ap-t:path-to "t" "perl-project2" "file1")
+          (ap-t:directory-type)))
+
+      (desc "---------------- cake ----------------")
+      (expect 'cake
+        (ap:with-current-dir (ap-t:path-to "t" "cake-project" "index.php")
+          (ap-t:directory-type)
+          ))
+
+      (desc "---------------- symfony ----------------")
+      (expect 'symfony
+        (ap:with-current-dir (ap-t:path-to "t" "symfony-project" "apps")
+          (ap-t:directory-type)))
+      )))
 
 (provide 'anything-project)
