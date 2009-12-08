@@ -66,11 +66,9 @@
 
 (defvar ap:my-projects nil)
 (defvar ap:history nil)
+(defvar ap:version "0.01")
 
 (defvar ap:default-directory-filter-regexps nil)
-
-(defvar ap:default-filter-regexps
-  '("\\.pm$" "\\.t$" "\\.pl$" "\\.PL$"))
 
 ;; almost copied from `anything-find-resource--project-root-files'.
 (defvar ap:default-project-root-files
@@ -99,14 +97,24 @@
   "list of function filter project-files.
 each function is called with one arg(list of project-file)")
 
+(defvar ap:default-exclude-regexps '("~$")
+  "this variable always appent to :exclude-regexp.
+If you always ignore emacs backup file (that named \"hoge~\"),
+please set this to '(\"~$\")")
+
+(defcustom ap:ignore-directory-regexps nil
+  "list of regexp.
+If any this value matches directory that you invoke `anything-project' command,
+the command doesnt work")
+
 (defun ap:mk-list (a)
   (if (listp a) a (list a)))
 
 (defun ap:apply-filters (filter-fns files)
   (let ((ret nil))
-  (loop for filter-fn in ap:project-files-filters
-        do (setq ret (funcall filter-fn files))
-        finally return ret)))
+    (loop for filter-fn in ap:project-files-filters
+          do (setq ret (funcall filter-fn files))
+          finally return ret)))
 
 (defun* ap:add-project (&key name look-for (include-regexp ".*") (exclude-regexp nil) (exclude-directory-regexp nil) (grep-extensions nil))
   (assert (not (null look-for)))
@@ -121,26 +129,25 @@ each function is called with one arg(list of project-file)")
                           (,:exclude-regexp . ,(ap:mk-list exclude-regexp))
                           (,:grep-extensions . ,grep-extensions)))))
 
-;; (ap:get-project-data 'perl :look-for)
-
-
 (defun ap:get-project-data (name type)
   (let ((sym (intern (concat "ap:global-"
                              (replace-regexp-in-string "^:" "" (symbol-name type))))))
     (cond
-     ((when (and (boundp sym)
-                  (not (null sym))))
-      sym)
+     ((and (boundp sym)
+           (not (null (symbol-value sym))))
+      (symbol-value sym))
      (t
        (let ((alist (assoc-default name ap:projects)))
          (when alist
            (assoc-default type alist)))))))
+
 
 (defun ap:get-project-keys ()
   (let* ((keys (loop for alist in ap:projects
                      collect (first alist)))
          (keys (delete 'default keys)))
     (add-to-list 'keys 'default t)))
+
 
 (defun ap:root-directory-p (root-files-or-fn files)
   (cond
@@ -180,12 +187,14 @@ each function is called with one arg(list of project-file)")
                       (setq cur-dir (expand-file-name (concat cur-dir "../"))))
             finally return cur-dir))))
 
+
 (defun ap:get-root-directory ()
   (let ((project-keys (ap:get-project-keys)))
     (loop for key in project-keys
           for ret = (values (ap:get-root-directory-aux key) key)
           until (car ret)
           finally return ret)))
+
 ;;; add-to-history
 (defadvice ap:get-root-directory (after add-to-history activate)
   (ignore-errors
@@ -201,7 +210,7 @@ each function is called with one arg(list of project-file)")
          (string-match re file-name))
        regexps))))
 
-(defun* ap:directory-files-recursively (regexp &optional directory type (dir-filter-regexp nil))
+(defun* ap:directory-files-recursively (regexp &optional directory type (dir-filter-regexp nil) no-recursive)
   (let* ((directory (or directory default-directory))
          (predfunc (case type
                      (dir 'file-directory-p)
@@ -212,10 +221,12 @@ each function is called with one arg(list of project-file)")
          (files (remove-if (lambda (s) (string-match (rx bol (repeat 1 2 ".") eol) s)) files)))
     (loop for file in files
           when (and (funcall predfunc file)
-                    (ap:any-match regexp (file-name-nondirectory file)))
+                    (ap:any-match regexp (file-name-nondirectory file))
+                    (not (ap:any-match (ap:mk-list dir-filter-regexp) file)))
           collect file into ret
           when (and (file-directory-p file)
-                    (not (ap:any-match dir-filter-regexp file)))
+                    (not (ap:any-match dir-filter-regexp file))
+                    (not no-recursive))
           nconc (ap:directory-files-recursively regexp file type dir-filter-regexp) into ret
           finally return  ret)))
 
@@ -254,8 +265,9 @@ each function is called with one arg(list of project-file)")
      root-dir
      (lambda ()
        (message "getting project files...")
-       (let ((include-regexp (or ap:global-include-regexp (ap:get-project-data key :include-regexp)))
-             (exclude-regexp (or ap:global-exclude-regexp (ap:get-project-data key :exclude-regexp))))
+       (let* ((include-regexp (or ap:global-include-regexp (ap:get-project-data key :include-regexp)))
+              (exclude-regexp (or ap:global-exclude-regexp (ap:get-project-data key :exclude-regexp)))
+              (exclude-regexp (append (ap:mk-list ap:default-exclude-regexps) (ap:mk-list exclude-regexp))))
          (let* ((files (ap:directory-files-recursively include-regexp root-dir 'identity exclude-regexp))
                 (files (ap:apply-filters ap:project-files-filters files))
                 (files (ap:truncate-file-name root-dir files)))
@@ -277,6 +289,7 @@ each function is called with one arg(list of project-file)")
   (let ((root-dir (replace-regexp-in-string "/$" "" ap:root-directory)))
     (concat root-dir file)))
 
+
 (if (fboundp 'anything-run-after-quit)
     (defalias 'ap:anything-run-after-quit 'anything-run-after-quit)
   (defun ap:anything-run-after-quit (function &rest args)
@@ -289,16 +302,22 @@ The action is to call FUNCTION with arguments ARGS."
 (defun ap:project-files-init-msg ()
   (message "Buffer is not project file. buffer: %s" (ap:current-directory)))
 
+;;;; XXX what should i do if current directory is ignored directory.
 (defun* ap:project-files-init (&optional cache-clear files)
-  (let ((files (or files (ap:get-project-files cache-clear)))
-        (cands-buf (anything-candidate-buffer 'local)))
-    (cond
-     (files
-      (with-current-buffer cands-buf
-        (insert (mapconcat 'identity files "\n"))))
-     (t
-      (ap:anything-run-after-quit
-       'ap:project-files-init-msg)))))
+  (cond
+   ((ap:any-match ap:ignore-directory-regexps (ap:current-directory))
+    (ap:anything-run-after-quit
+     'ap:project-files-init-msg))
+   (t
+    (let ((files (or files (ap:get-project-files cache-clear)))
+          (cands-buf (anything-candidate-buffer 'local)))
+      (cond
+       (files
+        (with-current-buffer cands-buf
+          (insert (mapconcat 'identity files "\n"))))
+       (t
+        (ap:anything-run-after-quit
+         'ap:project-files-init-msg)))))))
 
 
 ;;;; %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -337,10 +356,6 @@ The action is to call FUNCTION with arguments ARGS."
      " "
      egrep-command " -Hin "
      "%s")))
-
-;;  (ap:build-grep-command  'perl "sub")
-;; ap:build-grep-command
-; (ap:get-grep-extensions 'perl)
 
 (defun ap:get-xargs-command ()
   (or (executable-find "xargs")
@@ -390,6 +405,7 @@ directory, open this directory."
                                          cache-clear
                                        current-prefix-arg))))
     (candidates-in-buffer)
+    (type . file)
     (action . (("Find file" .
                 (lambda (c)
                   (find-file (ap:expand-file c))))
@@ -507,6 +523,20 @@ directory, open this directory."
 (defun ap:path->filenames (los)
   (mapcar 'file-name-nondirectory los))
 
+;;; Python django
+(ap:add-project
+ :name 'django
+ :look-for 'ap:django-root-detector
+ :grep-extensions '("\\.py" "\\.yaml" "\\.html")
+ :exclude-regexp '("\\.pyc$"))
+
+(defun ap:django-root-detector (files)
+  (let ((django-files '("manage.py" "settings.py" "urls.py")))
+    (every
+     (lambda (django-file)
+       (find django-file files :test 'string=))
+     django-files)))
+
 ;;;; Test
 ;; Prefix: ap-t:
 (defun ap-t:directory-separator ()
@@ -524,17 +554,36 @@ directory, open this directory."
 (defun ap-t:directory-type ()
   (second (ap:get-root-directory)))
 
+(defun ap-t:get-project-files-with-no-cache ()
+  (ap:get-project-files t))
 
-; (ap-t:path-to "t" "projectX")
+;; (ap-t:to-bool 'x) => t
+;; (ap-t:to-bool 1) => t
+;; (ap-t:to-bool nil) => nil
+(defun ap-t:to-bool (obj)
+  (not (not obj)))
+
+
 (dont-compile
   (when (fboundp 'expectations)
     (expectations
+      (desc "---------------- basic ----------------")
+      (desc "---------------- :exclude-regexp ----------------")
+      (expect '("/test-project-file" "/file2" "/file1")
+        ;; define test project
+        (ap:add-project
+         :name 'test-project
+         :look-for '("test-project-file")
+         :exclude-regexp '("/exclude"))
+
+        (ap:with-current-dir (ap-t:path-to "t" "test-project1" "file1")
+          (ap-t:get-project-files-with-no-cache)))
+
       (desc "ap:directory-files-recursively")
       (desc "recursively projectX")
       (expect '("Makefile" "file2" "file1" "deep-file2" "deep-file1")
         (ap:path->filenames
-         (ap:directory-files-recursively ".*" (ap-t:path-to "t" "projectX") 'file))
-      )
+         (ap:directory-files-recursively ".*" (ap-t:path-to "t" "projectX") 'file)))
 
       (desc "non recursively")
       (expect t
@@ -542,6 +591,88 @@ directory, open this directory."
                            (ap:directory-files-recursively ".*" (ap-t:path-to "t" "projectX") nil nil t))))
           (and (not (member "deep-file2" file-names))
                (not (member "deep-file1" file-names)))))
+
+
+      (desc "---------------- project-data ----------------")
+      (desc "---------------- ap:get-project-data ----------------")
+      (expect '("/exclude")
+        (let ((ap:projects '((test-project
+                              (:exclude-regexp "/exclude")))))
+          (ap:get-project-data 'test-project :exclude-regexp)))
+
+      ;; ap:global-exclude-regexp overide :exclude-regexp
+      (expect "global-exclude-regexp"
+        (let ((ap:global-exclude-regexp "global-exclude-regexp")
+              (ap:projects '((test-project
+                              (:exclude-regexp "/exclude")))))
+          (ap:get-project-data 'test-project :exclude-regexp)))
+
+
+
+      (desc "---------------- ap:get-project-keys ----------------")
+      ;; 'default project should appear at last.
+      (expect '(foo-project bar-project baz-project default)
+        (let ((ap:projects '((foo-project ())
+                             (default ()) ;; default is special.
+                             (bar-project ())
+                             (baz-project ()))))
+          (ap:get-project-keys)))
+
+
+
+
+      (desc "---------------- default-exclude-regexp ----------------")
+      (expect t
+        (let ((ap:default-exclude-regexps nil))
+          (ap-t:to-bool
+           (member "file1~"
+                   (ap:path->filenames
+                    (ap:with-current-dir (ap-t:path-to "t" "default-exclude-regexp-project" "file1")
+                      (ap-t:get-project-files-with-no-cache)))))))
+      (expect nil
+        (member "file1~"
+                (let ((ap:default-exclude-regexps '("~$"))
+                      (ap:--cache nil))
+                  (ap:path->filenames
+                   (ap:with-current-dir (ap-t:path-to "t" "default-exclude-regexp-project" "file1")
+                     (ap-t:get-project-files-with-no-cache))))))
+
+
+      (desc "---------------- ap:get-root-directory ----------------")
+      ;; deep directory
+      ;; find more upper directory
+      (expect t
+        (ap-t:to-bool
+         (let ((ap:get-root-directory-limit 10))
+           (ap:with-current-dir (ap-t:path-to "t" "deep-project" "1/2/3/4/5/6/7/8/9/10/11")
+             (first (ap:get-root-directory))))))
+
+      (expect nil
+        (ap-t:to-bool
+         (let ((ap:get-root-directory-limit 5))
+           (ap:with-current-dir (ap-t:path-to "t" "deep-project" "1/2/3/4/5/6/7/8/9/10/11")
+             (first (ap:get-root-directory))))))
+
+
+      (desc "---------------- ap:expand-file ----------------")
+      (expect '("/file1" "/file2")
+        (ap:truncate-file-name
+         (ap-t:path-to "t" "projectX")
+         (list
+          (ap-t:path-to "t" "projectX" "file1")
+          (ap-t:path-to "t" "projectX" "file2"))))
+
+      (expect '("t/projectX/file1" "t/projectX/file2")
+        (ap:abs->relatives
+         (let ((ap:root-directory
+                (ap-t:path-to "t" "projectX"))
+               (files (ap:truncate-file-name
+                       (ap-t:path-to "t" "projectX")
+                       (list
+                        (ap-t:path-to "t" "projectX" "file1")
+                        (ap-t:path-to "t" "projectX" "file2")))))
+           (mapcar (lambda (s) (ap:expand-file s)) files))))
+
 
       (desc "---------------- directory type ----------------")
       (desc "default")
@@ -570,6 +701,32 @@ directory, open this directory."
       (expect 'symfony
         (ap:with-current-dir (ap-t:path-to "t" "symfony-project" "apps")
           (ap-t:directory-type)))
+
+
+      (desc "---------------- project grep ----------------")
+      (desc "---------------- ap:build-grep-command ----------------")
+      (expect t
+        (ap-t:to-bool
+         (progn
+           (ap:add-project
+            :name 'test-project
+            :look-for "dummy"
+            :grep-extensions '(".pm" ".pl"))
+           (string-match (rx "ack -afG '(.pm|.pl)$' | " (+ not-newline) "xargs " (+ not-newline) "egrep -Hin %s")
+                         (ap:build-grep-command 'test-project)))))
+
+      (desc "---------------- django ----------------")
+      (expect 'django
+        (ap:with-current-dir (ap-t:path-to "t" "django-project" "app")
+          (ap-t:directory-type)))
+
+      (desc "---------------- didnt work exclude-regexp bug ----------------")
+      (desc "---------------- :exclude-regexp "\\.pyc$"  ----------------")
+      (expect nil
+        (member "manage.pyc"
+                (ap:path->filenames
+                 (ap:with-current-dir (ap-t:path-to "t" "django-project" "app")
+                   (ap-t:get-project-files-with-no-cache)))))
       )))
 
 (provide 'anything-project)
