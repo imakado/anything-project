@@ -1,10 +1,16 @@
-;;; anything-project.el -- finding any resource of a project
+;;; anything-project.el --- finding any resource of a project
 
-;; Copyright (c) 2009 by KAYAC Inc.
+;; Copyright (C) 2010-2014 imakado <ken.imakado_at_gmail.com>
+;; Copyright (C) 2009 KAYAC Inc
 
-;; Author: IMAKADO <ken.imakado@gmail.com>
-;; blog: http://d.hatena.ne.jp/IMAKADO (japanese)
 ;; Prefix: ap:
+;; Author: imakado <ken.imakado_at_gmail.com>
+;; Maintainer: imakado
+;; Created: :2014-10-23
+;; Version: 0.11
+;; Keywords: convenience
+;; URL: https://github.com/imakado/anything-project
+;; Package-Requires: ((imakado "0.11"))
 
 ;; This file is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -21,15 +27,13 @@
 ;; Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 ;; Boston, MA 02110-1301, USA.
 
-
 ;;; Commentary:
+
 ;; anything-project.el is pure emacs lisp version of anything-find-project-resources.el.
 ;; Many ideas are from
 ;; http://trac.codecheck.in/share/browser/lang/elisp/anything-find-project-resources/trunk/anything-find-project-resources.el
 ;; and
 ;; http://blog.jrock.us/articles/eproject.POD
-
-;;; Installation:
 
 ;; drop this file into a directory in your `load-path',
 ;; and put these lines into your .emacs file.
@@ -42,8 +46,6 @@
 
 ;; clear cache, If `anything-project' function is called with prefix arg (C-u M-x anything-project)
 
-
-;;; Configuration:
 ;; you can add new project rule by `ap:add-project' function
 ;; keywords :look-for, :include-regexp and :exclude-regexp can be regexp or list of regexp
 ;; below are few samples
@@ -61,6 +63,7 @@
 ;;  :exclude-regexp "/tmp" ; can be regexp or list of regexp
 ;;  )
 
+;;; Code:
 
 (require 'anything)
 (require 'cl)
