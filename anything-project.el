@@ -7,10 +7,10 @@
 ;; Author: imakado <ken.imakado_at_gmail.com>
 ;; Maintainer: imakado
 ;; Created: :2014-10-23
-;; Version: 0.11
+;; Version: 0.12
 ;; Keywords: convenience
 ;; URL: https://github.com/imakado/anything-project
-;; Package-Requires: ((imakado "0.11") (anything "1.3.9"))
+;; Package-Requires: ((imakado "0.12") (anything "1.3.9"))
 
 ;; This file is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -248,11 +248,11 @@ the command doesnt work"
 (defvar ap:directory-files-recursively-known-directories nil)
 (defun* ap:directory-files-recursively 
     (regexp &optional 
-            (directory (i/normalize-file-name default-directory))
+            (directory (imakado-normalize-file-name default-directory))
             type (dir-filter-regexp nil) no-recursive)
   (when current-prefix-arg
     (setq ap:directory-files-recursively-known-directories nil))
-  (let ((directory (i/normalize-file-name directory)))
+  (let ((directory (imakado-normalize-file-name directory)))
     (when (or (equal ap:root-directory directory)
               (not (member directory ap:directory-files-recursively-known-directories)))
       (let* ((predfunc (case type
@@ -275,7 +275,7 @@ the command doesnt work"
               finally return ret)))))
 
 (defun ap:follow-symlink (file)
-  (i/acond ((i/get-symlink-target-recursively file)
+  (imakado-acond ((imakado-get-symlink-target-recursively file)
           (expand-file-name it))
          (t (expand-file-name file))))
 
@@ -497,15 +497,16 @@ The action is to call FUNCTION with arguments ARGS."
 
 (defun ap:do-project-moccur-grep-find-make-query (query)
   (if anything-project-moccur-grep-find-enable-extension-filter
-      (i/aif (i/=~ (rx "." (+ not-newline) eol) query
+      (imakado-aif (imakado-=~ (rx "." (+ not-newline) eol) query
                ($sub ""))
           it
         query)
     query))
 
+
 (defun ap:do-project-moccur-grep-find-extension-filter-regexp (query)
   (when anything-project-moccur-grep-find-enable-extension-filter
-    (i/when-let (q (i/aand (split-string query "\\s +" t)
+    (imakado-when-let (q (imakado-aand (split-string query "\\s +" t)
                            (and (> (length it) 1)
                                 (last it))
                            (first it)
