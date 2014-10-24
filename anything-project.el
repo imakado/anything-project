@@ -10,7 +10,7 @@
 ;; Version: 0.11
 ;; Keywords: convenience
 ;; URL: https://github.com/imakado/anything-project
-;; Package-Requires: ((imakado "0.11"))
+;; Package-Requires: ((imakado "0.11") (anything "1.3.9"))
 
 ;; This file is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
